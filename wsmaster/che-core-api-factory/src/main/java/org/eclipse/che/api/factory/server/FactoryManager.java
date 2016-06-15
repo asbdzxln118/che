@@ -8,29 +8,47 @@
  * Contributors:
  *   Codenvy, S.A. - initial API and implementation
  *******************************************************************************/
-package org.eclipse.che.api.factory.server.impl;
+package org.eclipse.che.api.factory.server;
 
-import org.eclipse.che.api.core.BadRequestException;
-import org.eclipse.che.api.factory.server.FactoryAcceptValidator;
+
 import org.eclipse.che.api.factory.server.model.impl.FactoryImpl;
-import org.eclipse.che.api.user.server.dao.PreferenceDao;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
 /**
- * Factory accept stage validator.
+ *  // TODO : write doc
+ *
+ * @author Anton Korneta
  */
 @Singleton
-public class FactoryAcceptValidatorImpl extends FactoryBaseValidator implements FactoryAcceptValidator {
+public class FactoryManager {
+
+    private final FactoryDao factoryDao;
+
     @Inject
-    public FactoryAcceptValidatorImpl(PreferenceDao preferenceDao) {
-        super(preferenceDao);
+    public FactoryManager(FactoryDao factoryDao) {
+        this.factoryDao = factoryDao;
     }
 
-    @Override
-    public void validateOnAccept(FactoryImpl factory) throws BadRequestException {
-        validateCurrentTimeBetweenSinceUntil(factory);
-        validateProjectActions(factory);
+
+    public FactoryImpl createFactory(FactoryImpl factory, ) {
+        return null;
+    }
+
+    public FactoryImpl updateFactory() {
+        return null;
+    }
+
+    public FactoryImpl removeFactory() {
+        return null;
+    }
+
+    public FactoryImpl getById() {
+        return null;
+    }
+
+    public FactoryImpl getByAttribute() {
+        return null;
     }
 }
