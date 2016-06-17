@@ -207,6 +207,7 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
 
     @Override
     public void onMachineRunning(MachineStateEvent event) {
+        Log.error(getClass(), "onMachineRunning");
         workspaceAgent.setActivePart(this);
 
         machineService.getMachine(event.getMachineId()).then(new Operation<MachineDto>() {
@@ -271,6 +272,8 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
     }
 
     private void restoreState(final String machineId) {
+        Log.error(getClass(), "restoreState");
+
         machineService.getProcesses(machineId).then(new Operation<List<MachineProcessDto>>() {
             @Override
             public void apply(List<MachineProcessDto> arg) throws OperationException {
@@ -382,6 +385,7 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
      */
     @Override
     public void onAddTerminal(@NotNull final String machineId) {
+        Log.error(getClass(), "onAddTerminal");
         machineService.getMachine(machineId).then(new Operation<MachineDto>() {
             @Override
             public void apply(MachineDto arg) throws OperationException {
