@@ -128,9 +128,7 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
                                   MachineServiceClient machineService,
                                   MachineResources resources,
                                   AppContext appContext,
-                                  WorkspaceServiceClient workspaceService,
-                                  DtoUnmarshallerFactory dtoUnmarshallerFactory,
-                                  MessageBusProvider messageBusProvider) {
+                                  WorkspaceServiceClient workspaceService) {
         this.view = view;
         this.terminalFactory = terminalFactory;
         this.workspaceAgent = workspaceAgent;
