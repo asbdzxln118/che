@@ -392,13 +392,14 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
                 Machine machine = entityFactory.createMachine(arg);
                 final ProcessTreeNode machineTreeNode = findProcessTreeNodeById(machineId);
 
+                Log.error(getClass(), "onAddTerminal 2");
                 if (machineTreeNode == null) {
                     notificationManager.notify(localizationConstant.failedToConnectTheTerminal(),
                                                localizationConstant.machineNotFound(machineId), FAIL, FLOAT_MODE);
                     Log.error(getClass(), localizationConstant.machineNotFound(machineId));
                     return;
                 }
-
+                Log.error(getClass(), "onAddTerminal 2");
                 final TerminalPresenter newTerminal = terminalFactory.create(machine);
                 final IsWidget terminalWidget = newTerminal.getView();
                 final String terminalName = getUniqueTerminalName(machineTreeNode);
