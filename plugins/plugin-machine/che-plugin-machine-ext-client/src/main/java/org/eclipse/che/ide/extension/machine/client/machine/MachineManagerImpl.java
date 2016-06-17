@@ -19,16 +19,18 @@ import org.eclipse.che.api.core.rest.shared.dto.LinkParameter;
 import org.eclipse.che.api.machine.shared.dto.LimitsDto;
 import org.eclipse.che.api.machine.shared.dto.MachineConfigDto;
 import org.eclipse.che.api.machine.shared.dto.MachineDto;
+import org.eclipse.che.api.machine.shared.dto.MachineLogMessageDto;
 import org.eclipse.che.api.machine.shared.dto.MachineSourceDto;
 import org.eclipse.che.api.machine.shared.dto.event.MachineStatusEvent;
 import org.eclipse.che.api.promises.client.Operation;
 import org.eclipse.che.api.promises.client.OperationException;
 import org.eclipse.che.api.promises.client.Promise;
+import org.eclipse.che.api.workspace.shared.Constants;
+import org.eclipse.che.api.workspace.shared.dto.WorkspaceDto;
 import org.eclipse.che.ide.api.app.AppContext;
 import org.eclipse.che.ide.api.machine.DevMachine;
 import org.eclipse.che.ide.api.machine.MachineManager;
 import org.eclipse.che.ide.api.machine.MachineServiceClient;
-import org.eclipse.che.ide.api.machine.OutputMessageUnmarshaller;
 import org.eclipse.che.ide.api.machine.events.DevMachineStateEvent;
 import org.eclipse.che.ide.api.parts.PerspectiveManager;
 import org.eclipse.che.ide.api.workspace.WorkspaceServiceClient;
@@ -47,7 +49,6 @@ import org.eclipse.che.ide.websocket.rest.SubscriptionHandler;
 import org.eclipse.che.ide.websocket.rest.Unmarshallable;
 
 import static org.eclipse.che.api.machine.shared.Constants.LINK_REL_GET_MACHINE_LOGS_CHANNEL;
-import static org.eclipse.che.api.machine.shared.Constants.LINK_REL_GET_MACHINE_STATUS_CHANNEL;
 import static org.eclipse.che.ide.api.machine.MachineManager.MachineOperationType.DESTROY;
 import static org.eclipse.che.ide.api.machine.MachineManager.MachineOperationType.RESTART;
 import static org.eclipse.che.ide.api.machine.MachineManager.MachineOperationType.START;
@@ -79,11 +80,11 @@ public class MachineManagerImpl implements MachineManager, WorkspaceStoppedHandl
     private MessageBus messageBus;
     private boolean    isMachineRestarting;
 
-    private String                                  wsAgentLogChannel;
-    private String                                  statusChannel;
-    private String                                  outputChannel;
-    private SubscriptionHandler<MachineStatusEvent> statusHandler;
-    private SubscriptionHandler<String>             outputHandler;
+    private String                                    wsAgentLogChannel;
+    private String                                    statusChannel;
+    private String                                    outputChannel;
+    private SubscriptionHandler<MachineStatusEvent>   statusHandler;
+    private SubscriptionHandler<MachineLogMessageDto> outputHandler;
 
     @Inject
     public MachineManagerImpl(DtoUnmarshallerFactory dtoUnmarshallerFactory,
@@ -143,10 +144,10 @@ public class MachineManagerImpl implements MachineManager, WorkspaceStoppedHandl
             }
         };
 
-        outputHandler = new SubscriptionHandler<String>(new OutputMessageUnmarshaller()) {
+        outputHandler = new SubscriptionHandler<MachineLogMessageDto>(dtoUnmarshallerFactory.newWSUnmarshaller(MachineLogMessageDto.class)) {
             @Override
-            protected void onMessageReceived(String result) {
-                machineConsolePresenter.print(result);
+            protected void onMessageReceived(MachineLogMessageDto logMessage) {
+                machineConsolePresenter.print("[" + logMessage.getMachine() + "] " + logMessage.getContent());
             }
 
             @Override
@@ -336,11 +337,28 @@ public class MachineManagerImpl implements MachineManager, WorkspaceStoppedHandl
     }
 
     @Override
-    public void onDevMachineCreating(MachineConfigDto machineConfig) {
+    public void onWsStarting(WorkspaceDto workspace) {
         perspectiveManager.setPerspectiveId(OPERATIONS_PERSPECTIVE_ID);
         initialLoadingInfo.setOperationStatus(MACHINE_BOOTING.getValue(), IN_PROGRESS);
 
-        if (machineConfig.getLink(LINK_REL_GET_MACHINE_LOGS_CHANNEL) != null &&
+        if (workspace.getLink(Constants.GET_WORKSPACE_OUTPUT_CHANNEL) != null) {
+            final LinkParameter logsChannelLinkParameter = workspace.getLink(Constants.GET_WORKSPACE_OUTPUT_CHANNEL)
+                                                                    .getParameter("channel");
+            if (logsChannelLinkParameter != null) {
+                outputChannel = logsChannelLinkParameter.getDefaultValue();
+            }
+        }
+        if (outputChannel != null) {
+            wsAgentLogChannel = "workspace:" + appContext.getWorkspaceId() + ":ext-server:output";
+            statusChannel = "workspace:" + workspace.getId() + ":machines_statuses";
+            subscribeToChannel(wsAgentLogChannel, outputHandler);
+            subscribeToChannel(outputChannel, outputHandler);
+            subscribeToChannel(statusChannel, statusHandler);
+        } else {
+            initialLoadingInfo.setOperationStatus(MACHINE_BOOTING.getValue(), ERROR);
+        }
+
+        /*if (machineConfig.getLink(LINK_REL_GET_MACHINE_LOGS_CHANNEL) != null &&
             machineConfig.getLink(LINK_REL_GET_MACHINE_STATUS_CHANNEL) != null) {
             final LinkParameter logsChannelLinkParameter = machineConfig.getLink(LINK_REL_GET_MACHINE_LOGS_CHANNEL).getParameter("channel");
             if (logsChannelLinkParameter != null) {
@@ -359,7 +377,7 @@ public class MachineManagerImpl implements MachineManager, WorkspaceStoppedHandl
             subscribeToChannel(statusChannel, statusHandler);
         } else {
             initialLoadingInfo.setOperationStatus(MACHINE_BOOTING.getValue(), ERROR);
-        }
+        }*/
     }
 
     private void subscribeToChannel(String chanel, SubscriptionHandler handler) {

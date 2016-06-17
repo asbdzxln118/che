@@ -16,24 +16,27 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.google.web.bindery.event.shared.EventBus;
 
-import org.eclipse.che.ide.api.machine.MachineServiceClient;
-import org.eclipse.che.ide.api.machine.events.DevMachineStateEvent;
 import org.eclipse.che.api.machine.shared.dto.CommandDto;
 import org.eclipse.che.api.machine.shared.dto.MachineDto;
 import org.eclipse.che.api.machine.shared.dto.MachineProcessDto;
 import org.eclipse.che.api.promises.client.Operation;
 import org.eclipse.che.api.promises.client.OperationException;
 import org.eclipse.che.api.promises.client.PromiseError;
-import org.eclipse.che.ide.api.workspace.event.WorkspaceStoppedEvent;
-import org.eclipse.che.ide.api.workspace.event.WorkspaceStoppedHandler;
+import org.eclipse.che.api.workspace.shared.dto.WorkspaceDto;
 import org.eclipse.che.commons.annotation.Nullable;
 import org.eclipse.che.ide.api.app.AppContext;
+import org.eclipse.che.ide.api.dialogs.ConfirmCallback;
+import org.eclipse.che.ide.api.dialogs.DialogFactory;
+import org.eclipse.che.ide.api.machine.MachineServiceClient;
 import org.eclipse.che.ide.api.mvp.View;
 import org.eclipse.che.ide.api.notification.NotificationManager;
 import org.eclipse.che.ide.api.outputconsole.OutputConsole;
 import org.eclipse.che.ide.api.parts.HasView;
 import org.eclipse.che.ide.api.parts.WorkspaceAgent;
 import org.eclipse.che.ide.api.parts.base.BasePresenter;
+import org.eclipse.che.ide.api.workspace.WorkspaceServiceClient;
+import org.eclipse.che.ide.api.workspace.event.WorkspaceStoppedEvent;
+import org.eclipse.che.ide.api.workspace.event.WorkspaceStoppedHandler;
 import org.eclipse.che.ide.dto.DtoFactory;
 import org.eclipse.che.ide.extension.machine.client.MachineLocalizationConstant;
 import org.eclipse.che.ide.extension.machine.client.MachineResources;
@@ -48,9 +51,9 @@ import org.eclipse.che.ide.extension.machine.client.outputspanel.console.Command
 import org.eclipse.che.ide.extension.machine.client.outputspanel.console.CommandOutputConsole;
 import org.eclipse.che.ide.extension.machine.client.outputspanel.console.DefaultOutputConsole;
 import org.eclipse.che.ide.extension.machine.client.perspective.terminal.TerminalPresenter;
-import org.eclipse.che.ide.api.dialogs.ConfirmCallback;
-import org.eclipse.che.ide.api.dialogs.DialogFactory;
+import org.eclipse.che.ide.rest.DtoUnmarshallerFactory;
 import org.eclipse.che.ide.util.loging.Log;
+import org.eclipse.che.ide.websocket.MessageBusProvider;
 import org.vectomatic.dom.svg.ui.SVGResource;
 
 import javax.validation.constraints.NotNull;
@@ -97,6 +100,7 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
     private final MachineResources             resources;
     private final AppContext                   appContext;
     private final MachineServiceClient         machineService;
+    private final WorkspaceServiceClient       workspaceService;
     private final WorkspaceAgent               workspaceAgent;
     private final CommandTypeRegistry          commandTypeRegistry;
     private final Map<String, ProcessTreeNode> machineNodes;
@@ -123,7 +127,10 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
                                   MachineLocalizationConstant localizationConstant,
                                   MachineServiceClient machineService,
                                   MachineResources resources,
-                                  AppContext appContext) {
+                                  AppContext appContext,
+                                  WorkspaceServiceClient workspaceService,
+                                  DtoUnmarshallerFactory dtoUnmarshallerFactory,
+                                  MessageBusProvider messageBusProvider) {
         this.view = view;
         this.terminalFactory = terminalFactory;
         this.workspaceAgent = workspaceAgent;
@@ -137,6 +144,7 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
         this.entityFactory = entityFactory;
         this.appContext = appContext;
         this.machineService = machineService;
+        this.workspaceService = workspaceService;
 
         this.rootChildren = new ArrayList<>();
         this.terminals = new HashMap<>();
@@ -146,17 +154,6 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
 
         this.view.setDelegate(this);
         this.view.setTitle(localizationConstant.viewConsolesTitle());
-
-        eventBus.addHandler(DevMachineStateEvent.TYPE, new DevMachineStateEvent.Handler() {
-            @Override
-            public void onDevMachineStarted(DevMachineStateEvent event) {
-                fetchMachines();
-            }
-
-            @Override
-            public void onDevMachineDestroyed(DevMachineStateEvent event) {
-            }
-        });
 
         eventBus.addHandler(ProcessFinishedEvent.TYPE, this);
         eventBus.addHandler(WorkspaceStoppedEvent.TYPE, this);
@@ -242,31 +239,18 @@ public class ConsolesPanelPresenter extends BasePresenter implements ConsolesPan
     public void fetchMachines() {
         String workspaceId = appContext.getWorkspaceId();
 
-        machineService.getMachines(workspaceId).then(new Operation<List<MachineDto>>() {
+        workspaceService.getWorkspace(workspaceId).then(new Operation<WorkspaceDto>() {
             @Override
-            public void apply(List<MachineDto> machines) throws OperationException {
+            public void apply(WorkspaceDto workspace) throws OperationException {
+                List<MachineDto> machines = workspace.getRuntime().getMachines();
+
                 rootNode = new ProcessTreeNode(ROOT_NODE, null, null, null, rootChildren);
-
-                MachineDto devMachine = getDevMachine(machines);
-                addMachineToConsoles(devMachine);
-
-                machines.remove(devMachine);
 
                 for (MachineDto machine : machines) {
                     addMachineToConsoles(machine);
                 }
             }
         });
-    }
-
-    private MachineDto getDevMachine(List<MachineDto> machines) {
-        for (MachineDto machine : machines) {
-            if (machine.getConfig().isDev()) {
-                return machine;
-            }
-        }
-
-        throw new IllegalArgumentException("Dev machine can not be null");
     }
 
     private void addMachineToConsoles(MachineDto machine) {
